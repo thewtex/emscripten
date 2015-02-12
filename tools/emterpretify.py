@@ -22,6 +22,7 @@ ASYNC = False
 ASSERTIONS = False
 PROFILING = False
 SWAPPABLE = False
+FROUND = False
 
 def handle_arg(arg):
   global ZERO, ASYNC, ASSERTIONS, PROFILING
@@ -31,6 +32,7 @@ def handle_arg(arg):
     elif l == 'ASYNC': ASYNC = int(r)
     elif l == 'ASSERTIONS': ASSERTIONS = int(r)
     elif l == 'PROFILING': PROFILING = int(r)
+    elif l == 'FROUND': FROUND = int(r)
     return False
   return True
 
@@ -218,6 +220,11 @@ OPCODES = [ # l, lx, ly etc - one of 256 locals
   'TSLOWD',    # [lxl, lxh, ly]       lx = ly (double; lx = lxl,lxh)
 ]
 
+if FROUND:
+  opcodes.append(
+    'FROUND',    # [lx, ly]         lx = Math.fround(ly), rounds doubles to floats
+  )
+
 def randomize_opcodes():
   global OPCODES
   import random
@@ -255,7 +262,7 @@ def get_access(l, s='i', base='sp', offset=None):
     offset = ''
   if s == 'i':
     return 'HEAP32[' + str(base) + ' + (' + l + ' << 3) ' + offset + '>> 2]'
-  elif s == 'd':
+  elif s == 'd' or s == 'f':
     return 'HEAPF64[' + str(base) + ' + (' + l + ' << 3) ' + offset + '>> 3]'
   else:
     assert 0
@@ -266,7 +273,7 @@ def get_coerced_access(l, s='i', unsigned=False, base='sp', offset=None):
       return get_access(l, s, base, offset) + '|0'
     else:
       return get_access(l, s, base, offset) + '>>>0'
-  elif s == 'd':
+  elif s == 'd' or s == 'f':
     return '+' + get_access(l, s, base, offset)
   else:
     assert 0
@@ -419,6 +426,9 @@ CASES[ROPCODES['GETTDP']] = get_access('lx') + ' = tempDoublePtr;'
 #CASES[ROPCODES['GETPC']] = get_access('lx') + ' = pc;'
 CASES[ROPCODES['GETTR0']] = get_access('lx') + ' = tempRet0;'
 CASES[ROPCODES['SETTR0']] = 'tempRet0 = ' + get_coerced_access('lx') + ';'
+
+if FROUND:
+  CASES[ROPCODES['FROUND']] = get_access('lx', s='d') + ' = Math_fround(' + get_coerced_access('ly', s='d') + ');'
 
 # stacktop handling: if allowing async, the very bottom will contain the function being executed,
 #                    for stack trace reconstruction. We store [pc of function, curr pc]
@@ -920,6 +930,7 @@ if __name__ == '__main__':
         lines[i] = lines[i].replace(call, '(%s)' % (funcs[func] + code_start))
 
   # finalize funcs JS (first line has the marker, add emterpreters right after that)
+  #print >> sys.stderr, lines
   asm.funcs_js = '\n'.join([lines[0], make_emterpreter(), make_emterpreter(zero=True) if ZERO else '', '\n'.join(filter(lambda line: len(line) > 0, lines[1:]))]) + '\n'
   lines = None
 

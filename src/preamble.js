@@ -1300,6 +1300,7 @@ function enlargeMemory() {
 var byteLength;
 try {
   byteLength = Function.prototype.call.bind(Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength').get);
+  byteLength(new ArrayBuffer(4));
 } catch(e) { // can fail on older node/v8
   byteLength = function(buffer) { return buffer.byteLength; };
 }

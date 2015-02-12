@@ -956,6 +956,7 @@ class Settings2(type):
       if attr in self.attrs:
         return self.attrs[attr]
       else:
+        print >> sys.stderr, 'bad', attr, self.attrs
         raise AttributeError
 
     def __setattr__(self, attr, value):
@@ -1819,7 +1820,7 @@ class JS:
       return value + '|0'
     if sig in JS.FLOAT_SIGS and convert_from == 'i':
       value = '(' + value + '|0)'
-    if sig == 'f' and settings.get('PRECISE_F32'):
+    if sig == 'f' and settings.PRECISE_F32:
       if ffi_arg:
         return '+Math_fround(' + value + ')'
       elif ffi_result:

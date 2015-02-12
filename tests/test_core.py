@@ -482,8 +482,6 @@ class T(RunnerCore): # Short name, to make it more fun to use manually on the co
     self.do_run_from_file(src, output)
 
   def test_float32_precise(self):
-    if self.is_emterpreter(): return self.skip('todo')
-
     Settings.PRECISE_F32 = 1
     test_path = path_from_root('tests', 'core', 'test_float32_precise')
     src, output = (test_path + s for s in ('.in', '.out'))

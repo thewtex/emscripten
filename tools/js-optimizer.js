@@ -2307,6 +2307,14 @@ function detectSign(node) {
     case 'conditional': case 'seq': {
       return detectSign(node[2]);
     }
+    case 'call': {
+      if (node[1][0] === 'name') {
+        switch (node[1][1]) {
+          case 'Math_fround': return ASM_NONSIGNED
+          default: break;
+        }
+      }
+    }
   }
   assert(0 , 'badd ' + JSON.stringify(node));
 }
@@ -6165,12 +6173,17 @@ function emterpretify(ast) {
     return Array.prototype.slice.call(tempUint8, 0, 8);
   }
 
-  function verifyCode(code) {
+  function fixType(type) { // we treat floats as doubles, and just run Math.fround to truncate where needed. this is about correctness, not speed!
+    if (type === ASM_FLOAT) type = ASM_DOUBLE;
+    return type;
+  }
+
+  function verifyCode(code, stat) {
     if (code.length % 4 !== 0) assert(0, JSON.stringify(code));
     var len = code.length;
     for (var i = 0; i < len; i++) {
       if (typeof code[i] !== 'string' && typeof code[i] !== 'number' && !(typeof code[i] === 'object' && code[i].what)) {
-        assert(0, i + ' : ' + JSON.stringify(code));
+        assert(0, i + ' : ' + JSON.stringify(code) + ' from ' + JSON.stringify(stat));
       }
     }
   }
@@ -6478,7 +6491,7 @@ function emterpretify(ast) {
             })();
             // add a coercion on the value, if needed
             if (!appliedCoercion) {
-              var innerType = detectType(node[2], asmData);
+              var innerType = fixType(detectType(node[2], asmData));
               if (innerType !== ASM_DOUBLE) {
                 if (innerType === ASM_INT) {
                   var sign = detectSign(node[2]);
@@ -6686,6 +6699,7 @@ function emterpretify(ast) {
     }
 
     function makeSet(dst, src, type) {
+      type = fixType(type);
       assert(dst < 256 && src < 256);
       if (dst === src) return [];
       var opcode;
@@ -6736,6 +6750,7 @@ function emterpretify(ast) {
     }
 
     function makeBinary(node, type, sign, assignTo) {
+      type = fixType(type);
       var opcode;
       var numValue = null; // if one operand is a number, we can emit an optimized op
       var otherValue = null;
@@ -6861,6 +6876,7 @@ function emterpretify(ast) {
         case '>>>': opcode = 'LSHR'; tryNumAsymmetrical(true); break;
         default: throw 'bad ' + node[1];
       }
+      if (!opcode) assert(0, JSON.stringify([node, type, sign]));
       var x, y, z;
       var usingNumValue = numValue !== null && ((!numValueUnsigned && ((numValue << 24 >> 24) === numValue)) ||
                                                 ( numValueUnsigned && ((numValue & 255) === numValue)));
@@ -6882,6 +6898,7 @@ function emterpretify(ast) {
     }
 
     function makeUnary(node, type, sign, assignTo) {
+      type = fixType(type);
       var opcode;
       switch(node[1]) {
         case '-': {
@@ -7167,7 +7184,7 @@ function emterpretify(ast) {
         if (freeLocals.length !== before) assert(0, [before, freeLocals.length] + ' due to ' + astToSrc(stat)); // the statement is done - nothing should still be held on to
         var curr = raw[1];
         //printErr('stat: ' + JSON.stringify(curr));
-        verifyCode(curr);
+        verifyCode(curr, stat);
         ret = ret.concat(curr);
       });
       return ret;
@@ -7564,8 +7581,8 @@ function emterpretify(ast) {
         var code;
         switch (asmData.params[arg]) {
           case ASM_INT:    code = 'HEAP32[' + (zero ? (bump >> 2) : ('EMTSTACKTOP + ' + bump + ' >> 2')) + '] = ' + arg + ';'; break;
+          case ASM_FLOAT:
           case ASM_DOUBLE: code = 'HEAPF64[' + (zero ? (bump >> 3) : ('EMTSTACKTOP + ' + bump + ' >> 3')) + '] = ' + arg + ';'; break;
-          case ASM_FLOAT:  code = 'HEAPF32[' + (zero ? (bump >> 2) : ('EMTSTACKTOP + ' + bump + ' >> 2')) + '] = ' + arg + ';'; break;
           default: throw 'bad';
         }
         argStats.push(srcToStat(code));
